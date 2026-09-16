@@ -28,7 +28,14 @@ const startServer = (port) => {
   const server = createServer(app);
   const io = new Server(server, {
     cors: {
-      origin: ['http://localhost:5173', 'http://localhost:5174', 'http://127.0.0.1:5173', 'http://127.0.0.1:5174'],
+      origin: [
+        process.env.CLIENT_URL || 'http://localhost:5173',
+        process.env.ADMIN_URL || 'http://localhost:5174',
+        'http://localhost:5173',
+        'http://localhost:5174',
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:5174',
+      ],
       methods: ['GET', 'POST'],
       credentials: true,
     },
@@ -42,8 +49,8 @@ const startServer = (port) => {
     });
   });
 
-  server.listen(port, 'localhost', () => {
-    console.log(`Backend running at http://localhost:${port}`);
+  server.listen(port, '0.0.0.0', () => {
+    console.log(`Backend running on port ${port}`);
   });
 
   server.on('error', (error) => {
