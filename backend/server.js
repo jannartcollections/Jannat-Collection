@@ -52,16 +52,6 @@ const startServer = (port) => {
   server.listen(port, '0.0.0.0', () => {
     console.log(`Backend running on port ${port}`);
   });
-
-  server.on('error', (error) => {
-    if (error.code === 'EADDRINUSE') {
-      console.warn(`Port ${port} is busy. Trying ${port + 1}...`);
-      startServer(port + 1);
-      return;
-    }
-
-    throw error;
-  });
 };
 
 const preferredPort = Number(process.env.PORT) || 5001;
