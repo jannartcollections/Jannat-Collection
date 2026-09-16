@@ -69,9 +69,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const initializeApp = async () => {
-  await connectDB();
-  await ensureDefaultAdmin();
-  await verifySmtpConnection();
+  startServer(preferredPort);
 
   app.get('/api/health', (req, res) => {
     res.json({
@@ -91,7 +89,9 @@ const initializeApp = async () => {
   app.use('/api/customers', customerRoutes);
   app.use('/api/config', configRoutes);
 
-  startServer(preferredPort);
+  await connectDB();
+  await ensureDefaultAdmin();
+  await verifySmtpConnection();
 };
 
 initializeApp();
