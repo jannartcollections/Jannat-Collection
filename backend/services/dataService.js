@@ -8,6 +8,8 @@ export const setDbAvailable = (available) => {
   dbAvailable = available;
 };
 
+export const isDbAvailable = () => dbAvailable;
+
 export const getAllProducts = async () => {
   try {
     if (dbAvailable) {

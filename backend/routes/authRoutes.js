@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { protect } from '../middleware/authMiddleware.js';
+import { isDbAvailable } from '../services/dataService.js';
 
 const router = express.Router();
 
@@ -19,6 +20,11 @@ const generateToken = (id, role) =>
   });
 
 export const ensureDefaultAdmin = async () => {
+  if (!isDbAvailable()) {
+    console.warn('Skipping default admin setup because MongoDB is unavailable.');
+    return;
+  }
+
   try {
     const existingAdmin = await User.findOne({ email: DEFAULT_ADMIN.email.toLowerCase() });
 
