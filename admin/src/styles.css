@@ -1108,16 +1108,51 @@ textarea {
 
 @media (max-width: 760px) {
   .admin-layout {
-    flex-direction: column;
+    display: block;
+    min-height: 100vh;
+    overflow: visible;
+    height: auto;
   }
 
   .sidebar {
+    position: static;
     width: 100%;
+    height: auto;
+    min-height: unset;
+    padding-bottom: 12px;
   }
 
   .sidebar-menu {
     display: grid;
-    grid-template-columns: repeat(2, minmax(180px, 1fr));
+    grid-template-columns: repeat(2, minmax(150px, 1fr));
+    gap: 8px;
+    margin-top: 18px;
+  }
+
+  .sidebar-menu button {
+    padding: 10px 12px;
+    font-size: 0.82rem;
+  }
+
+  .admin-main {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+    padding: 16px 14px 24px;
+  }
+
+  .admin-topbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .admin-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .admin-actions button {
+    flex: 1;
   }
 
   .stats-grid,
@@ -1162,10 +1197,5 @@ textarea {
   .live-item span {
     max-width: 100%;
     white-space: normal;
-  }
-
-  .admin-topbar {
-    flex-direction: column;
-    align-items: flex-start;
   }
 }

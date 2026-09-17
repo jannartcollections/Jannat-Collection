@@ -22,7 +22,7 @@ const categoryMatches = (productCategory, selectedCategory) => {
 };
 const formatAmount = (amount) => `₦${Number(amount || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const profileTabs = ['Profile', 'Purchase History', 'Complaints', 'Complaint History', 'Settings'];
+const profileTabs = ['Profile', 'Purchase History', 'Complaints', 'Settings'];
 
 export default function App() {
   const [products, setProducts] = useState([]);
@@ -64,16 +64,12 @@ export default function App() {
   const [checkoutError, setCheckoutError] = useState('');
   const [paymentResult, setPaymentResult] = useState(null);
   const [purchaseHistory, setPurchaseHistory] = useState([]);
-  const [orderStatusNotice, setOrderStatusNotice] = useState('');
   const [complaintStatus, setComplaintStatus] = useState('');
   const [newsLetterStatus, setNewsLetterStatus] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeInfoPage, setActiveInfoPage] = useState('');
   const [storeCategories, setStoreCategories] = useState(defaultStoreCategories);
-  const [myComplaints, setMyComplaints] = useState([]);
-  const [profileSaving, setProfileSaving] = useState(false);
-  const [profileMessage, setProfileMessage] = useState('');
   const collectionRef = useRef(null);
 
   const categoryOptions = useMemo(() => {
@@ -131,10 +127,7 @@ export default function App() {
         setShowCart(false);
         setShowCheckoutDetails(false);
         window.history.replaceState({}, '', '/');
-        if (localStorage.getItem('authToken')) {
-          fetchPurchaseHistory(localStorage.getItem('authToken'));
-          fetchMyComplaints(localStorage.getItem('authToken'));
-        }
+        if (localStorage.getItem('authToken')) fetchPurchaseHistory(localStorage.getItem('authToken'));
       })
       .catch((error) => setPaymentResult({ success: false, message: error.message }));
   }, []);
@@ -452,7 +445,6 @@ export default function App() {
       
       // Fetch user's purchase history
       fetchPurchaseHistory(token);
-      fetchMyComplaints(token);
     }
   }, []);
 
@@ -463,14 +455,7 @@ export default function App() {
       });
       if (response.ok) {
         const orders = await response.json();
-        setPurchaseHistory((previousOrders) => {
-          const previousStatuses = new Map(previousOrders.map((order) => [order._id, order.status]));
-          const changedOrder = orders.find((order) => previousStatuses.has(order._id) && previousStatuses.get(order._id) !== order.status);
-          if (changedOrder) {
-            setOrderStatusNotice(`Order #${changedOrder._id.slice(-6).toUpperCase()} is now ${changedOrder.status}.`);
-          }
-          return orders;
-        });
+        setPurchaseHistory(orders);
       } else if (response.status === 401) {
         localStorage.removeItem('authToken');
         localStorage.removeItem('currentUser');
@@ -480,52 +465,6 @@ export default function App() {
       }
     } catch (error) {
       console.error('Failed to fetch orders:', error);
-    }
-  };
-
-  useEffect(() => {
-    if (!isLoggedIn) return undefined;
-    const token = localStorage.getItem('authToken');
-    if (!token) return undefined;
-
-    const intervalId = window.setInterval(() => fetchPurchaseHistory(token), 30000);
-    return () => window.clearInterval(intervalId);
-  }, [isLoggedIn]);
-
-  const fetchMyComplaints = async (token) => {
-    try {
-      const response = await fetch(`${API_URL}/complaints/my-complaints`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (response.ok) setMyComplaints(await response.json());
-    } catch (error) {
-      console.error('Failed to fetch complaint history:', error);
-    }
-  };
-
-  const handleSaveProfile = async (event) => {
-    event.preventDefault();
-    const token = localStorage.getItem('authToken');
-    if (!token) return;
-
-    setProfileSaving(true);
-    setProfileMessage('');
-    try {
-      const response = await fetch(`${API_URL}/auth/profile`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(profileForm),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Failed to save profile');
-
-      localStorage.setItem('currentUser', JSON.stringify(data.user));
-      setCurrentUser(data.user);
-      setProfileMessage('Profile saved successfully');
-    } catch (error) {
-      setProfileMessage(error.message);
-    } finally {
-      setProfileSaving(false);
     }
   };
 
@@ -770,7 +709,6 @@ export default function App() {
       case 'Purchase History':
         return (
           <div className="history-list">
-            {orderStatusNotice && <div className="checkout-success">{orderStatusNotice}</div>}
             {purchaseHistory.length > 0 ? (
               purchaseHistory.map((order) => (
                 <div key={order._id} className="history-item">
@@ -831,24 +769,9 @@ export default function App() {
             </form>
           </div>
         );
-      case 'Complaint History':
-        return (
-          <div className="history-list">
-            {myComplaints.length > 0 ? myComplaints.map((item) => (
-              <div key={item.id || item._id} className="history-item">
-                <div>
-                  <strong>{item.subject}</strong>
-                  <small>{new Date(item.createdAt).toLocaleDateString()}</small>
-                  <p>{item.message}</p>
-                </div>
-                <span className={`complaint-status status-${item.status.replace(' ', '-')}`}>{item.status}</span>
-              </div>
-            )) : <p className="empty-state">No complaints submitted yet.</p>}
-          </div>
-        );
       case 'Settings':
         return (
-          <form className="settings-panel" onSubmit={handleSaveProfile}>
+          <div className="settings-panel">
             <div className="avatar-upload-box">
               {typeof profileImage === 'string' && profileImage.length <= 2 ? (
                 <div className="profile-avatar large">{profileImage}</div>
@@ -891,11 +814,7 @@ export default function App() {
                 />
               </label>
             </div>
-            {profileMessage && <p className="empty-state">{profileMessage}</p>}
-            <button className="primary-btn" type="submit" disabled={profileSaving}>
-              {profileSaving ? 'Saving...' : 'Save profile'}
-            </button>
-          </form>
+          </div>
         );
       default:
         return (

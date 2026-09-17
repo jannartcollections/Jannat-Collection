@@ -108,7 +108,6 @@ export default function App() {
     stock: '',
     description: '',
   });
-  const [editingProductId, setEditingProductId] = useState(null);
   const [productImages, setProductImages] = useState([]);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [adminToken, setAdminToken] = useState(localStorage.getItem('adminToken') || '');
@@ -124,9 +123,6 @@ export default function App() {
   const [systemConfigSaving, setSystemConfigSaving] = useState(false);
   const [systemConfigMessage, setSystemConfigMessage] = useState('');
   const [newCategory, setNewCategory] = useState('');
-  const [orderSearch, setOrderSearch] = useState('');
-  const [customerSearch, setCustomerSearch] = useState('');
-  const [productSearch, setProductSearch] = useState('');
 
   const categoryOptions = useMemo(() => {
     const configCategories = Array.isArray(systemConfig?.categories) ? systemConfig.categories : [];
@@ -142,32 +138,51 @@ export default function App() {
   const ensureAdminSession = async () => {
     const savedToken = localStorage.getItem('adminToken');
     if (savedToken) {
-      try {
-        const response = await fetch(`${API_URL}/auth/me`, {
-          headers: { Authorization: `Bearer ${savedToken}` },
-        });
-        const data = await response.json();
-        if (response.ok && data.user?.role === 'admin') {
-          setAdminToken(savedToken);
-          return savedToken;
-        }
-      } catch (error) {
-        console.warn('Saved admin session validation failed:', error);
-      }
-      localStorage.removeItem('adminToken');
+      setAdminToken(savedToken);
+      return savedToken;
     }
 
+    const adminCredentials = {
+      email: 'admin@jannatcollection.com',
+      password: 'admin123',
+    };
+
     try {
-      const response = await fetch(`${API_URL}/auth/login`, {
+      let response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: 'admin@jannatcollection.com',
-          password: 'admin123',
-        }),
+        body: JSON.stringify(adminCredentials),
       });
 
-      const data = await response.json();
+      let data = await response.json().catch(() => ({}));
+
+      if (!response.ok && [401, 403, 404].includes(response.status)) {
+        const createResponse = await fetch(`${API_URL}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: 'Admin User',
+            email: adminCredentials.email,
+            password: adminCredentials.password,
+            role: 'admin',
+          }),
+        });
+
+        const createData = await createResponse.json().catch(() => ({}));
+
+        if (!createResponse.ok && createData.message !== 'User already exists') {
+          throw new Error(createData.message || 'Admin account could not be created');
+        }
+
+        response = await fetch(`${API_URL}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(adminCredentials),
+        });
+
+        data = await response.json().catch(() => ({}));
+      }
+
       if (!response.ok) {
         throw new Error(data.message || 'Admin login failed');
       }
@@ -177,6 +192,8 @@ export default function App() {
       return data.token;
     } catch (error) {
       console.error('Admin session bootstrap failed:', error);
+      localStorage.removeItem('adminToken');
+      setAdminToken('');
       return '';
     }
   };
@@ -224,8 +241,8 @@ export default function App() {
       }
     };
 
-    if (adminToken) fetchAdminData();
-  }, [adminToken]);
+    fetchAdminData();
+  }, []);
 
   const updateOrderStatus = async (orderId, status) => {
     const token = await ensureAdminSession();
@@ -434,11 +451,11 @@ export default function App() {
 
     const token = await ensureAdminSession();
     if (!token) {
-      alert('Admin session could not be created. Please try again.');
+      alert('Admin session is unavailable. Please confirm the backend and database are running, then refresh the page.');
       return;
     }
 
-    const productPayload = {
+    const newProduct = {
       name: productForm.name,
       description: productForm.description || 'No description',
       price: Number(productForm.price),
@@ -451,20 +468,18 @@ export default function App() {
     };
 
     try {
-      const response = await fetch(`${API_URL}/products${editingProductId ? `/${editingProductId}` : ''}`, {
-        method: editingProductId ? 'PUT' : 'POST',
+      const response = await fetch(`${API_URL}/products`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(productPayload),
+        body: JSON.stringify(newProduct),
       });
 
       if (response.ok) {
         const savedProduct = await response.json();
-        setProducts((current) => editingProductId
-          ? current.map((product) => product._id === editingProductId ? savedProduct : product)
-          : [savedProduct, ...current]);
+        setProducts((current) => [savedProduct, ...current]);
         setProductForm({
           name: '',
           category: '',
@@ -473,7 +488,6 @@ export default function App() {
           description: '',
         });
         setProductImages([]);
-        setEditingProductId(null);
         setSelectedSidebar('Product List');
         return;
       }
@@ -486,32 +500,13 @@ export default function App() {
     }
   };
 
-  const startEditingProduct = (product) => {
-    setEditingProductId(product._id);
-    setProductForm({
-      name: product.name || '',
-      category: product.category || '',
-      price: product.price || '',
-      stock: product.stock || '',
-      description: product.description || '',
-    });
-    setProductImages((product.images || []).map((url) => ({ url, preview: url, filename: url.split('/').pop() })));
-    setSelectedSidebar('Add Product');
-  };
-
-  const cancelProductEdit = () => {
-    setEditingProductId(null);
-    setProductForm({ name: '', category: '', price: '', stock: '', description: '' });
-    setProductImages([]);
-  };
-
   const handleDeleteProduct = async (productId) => {
     if (!confirm('Are you sure you want to delete this product?')) return;
 
     try {
       const token = await ensureAdminSession();
       if (!token) {
-        alert('Admin session could not be created. Please try again.');
+        alert('Admin session is unavailable. Please confirm the backend and database are running, then refresh the page.');
         return;
       }
 
@@ -532,7 +527,7 @@ export default function App() {
     try {
       const token = await ensureAdminSession();
       if (!token) {
-        alert('Admin session could not be created. Please try again.');
+        alert('Admin session is unavailable. Please confirm the backend and database are running, then refresh the page.');
         return;
       }
 
@@ -631,11 +626,9 @@ export default function App() {
             <div className="section-header-row">
               <div>
                 <p className="eyebrow">Inventory</p>
-                <h3>{editingProductId ? 'Edit Product' : 'Add New Product'}</h3>
+                <h3>Add New Product</h3>
               </div>
-              {editingProductId ? (
-                <button type="button" className="secondary-btn" onClick={cancelProductEdit}>Cancel edit</button>
-              ) : <span className="form-pill">Fresh listing</span>}
+              <span className="form-pill">Fresh listing</span>
             </div>
 
             <form className="admin-product-form" onSubmit={handleAddProduct}>
@@ -735,7 +728,7 @@ export default function App() {
               </div>
 
               <button type="submit" className="dark-btn full-width-button" disabled={uploadingImages}>
-                {uploadingImages ? 'Uploading...' : editingProductId ? 'Update product' : 'Save product'}
+                {uploadingImages ? 'Uploading...' : 'Save product'}
               </button>
             </form>
           </div>
@@ -745,12 +738,11 @@ export default function App() {
         return (
           <div className="admin-form-card">
             <h3>Product List</h3>
-            <input value={productSearch} onChange={(event) => setProductSearch(event.target.value)} placeholder="Search products..." aria-label="Search products" />
             <div className="product-table">
-              {products.filter((product) => `${product.name} ${product.category} ${product.description}`.toLowerCase().includes(productSearch.trim().toLowerCase())).length === 0 ? (
+              {products.length === 0 ? (
                 <p className="empty-state">No products available yet.</p>
               ) : (
-                products.filter((product) => `${product.name} ${product.category} ${product.description}`.toLowerCase().includes(productSearch.trim().toLowerCase())).map((product) => (
+                products.map((product) => (
                   <div key={product._id || product.name} className="product-row-admin">
                     <div className="product-main-info">
                       <strong>{product.name}</strong>
@@ -765,13 +757,6 @@ export default function App() {
                     </div>
 
                     <div className="product-actions">
-                      <button
-                        type="button"
-                        className="secondary-btn"
-                        onClick={() => startEditingProduct(product)}
-                      >
-                        Edit
-                      </button>
                       <button
                         type="button"
                         className="toggle-stock-btn"
@@ -837,9 +822,8 @@ export default function App() {
         return (
           <div className="admin-form-card">
             <h3>Order History</h3>
-            <input value={orderSearch} onChange={(event) => setOrderSearch(event.target.value)} placeholder="Search orders or customers..." aria-label="Search orders" />
             <div className="live-list">
-              {orders.filter((order) => `${order._id} ${order.customer?.name || ''} ${order.customer?.email || ''} ${order.status}`.toLowerCase().includes(orderSearch.trim().toLowerCase())).length === 0 ? <p className="empty-state">No matching orders found.</p> : orders.filter((order) => `${order._id} ${order.customer?.name || ''} ${order.customer?.email || ''} ${order.status}`.toLowerCase().includes(orderSearch.trim().toLowerCase())).map((order) => (
+              {orders.length === 0 ? <p className="empty-state">No orders have been placed yet.</p> : orders.map((order) => (
                 <div className="order-card" key={order._id}>
                   <div className="order-card-topline">
                     <span className={`order-status status-${order.status}`}>{order.status}</span>
@@ -856,7 +840,13 @@ export default function App() {
                   <div className="order-card-footer">
                     <span className="payment-state">Payment: {order.paymentStatus}</span>
                     <span>{order.customer?.address || 'No delivery address recorded'}</span>
-                    <span className={`order-status status-${order.status}`}>{order.status}</span>
+                    <select className={`order-status-select status-select-${order.status}`} value={order.status} onChange={(e) => updateOrderStatus(order._id, e.target.value)}>
+                      <option value="pending">Pending</option>
+                      <option value="paid">Paid</option>
+                      <option value="shipped">Shipped</option>
+                      <option value="delivered">Delivered</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
                   </div>
                 </div>
               ))}
@@ -868,9 +858,8 @@ export default function App() {
         return (
           <div className="admin-form-card">
             <h3>Customers</h3>
-            <input value={customerSearch} onChange={(event) => setCustomerSearch(event.target.value)} placeholder="Search customers..." aria-label="Search customers" />
             <div className="live-list">
-              {customers.filter((customer) => `${customer.name} ${customer.email} ${customer.phone || ''}`.toLowerCase().includes(customerSearch.trim().toLowerCase())).length === 0 ? <p className="empty-state">No matching customers found.</p> : customers.filter((customer) => `${customer.name} ${customer.email} ${customer.phone || ''}`.toLowerCase().includes(customerSearch.trim().toLowerCase())).map((customer) => (
+              {customers.length === 0 ? <p className="empty-state">No customers registered yet.</p> : customers.map((customer) => (
                 <div className="live-item" key={customer._id}>
                   <div>
                     <strong>{customer.name}</strong>
