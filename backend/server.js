@@ -24,18 +24,56 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 
+const parseAllowedOrigins = (value = '') => value
+  .split(',')
+  .map((item) => item.trim())
+  .filter(Boolean)
+  .map((item) => item.replace(/\/+$/, ''));
+
+const allowedOrigins = [
+  ...parseAllowedOrigins(process.env.CLIENT_URL),
+  ...parseAllowedOrigins(process.env.ADMIN_URL),
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
+  'https://jannat-collection.vercel.app',
+  'https://jannat-collection-admin.vercel.app',
+];
+
+const uniqueAllowedOrigins = [...new Set(allowedOrigins)];
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+  return uniqueAllowedOrigins.includes(origin) || origin.endsWith('.vercel.app');
+};
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (isAllowedOrigin(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error(`Origin ${origin} not allowed by CORS`));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
 const startServer = (port) => {
   const server = createServer(app);
   const io = new Server(server, {
     cors: {
-      origin: [
-        process.env.CLIENT_URL || 'http://localhost:5173',
-        process.env.ADMIN_URL || 'http://localhost:5174',
-        'http://localhost:5173',
-        'http://localhost:5174',
-        'http://127.0.0.1:5173',
-        'http://127.0.0.1:5174',
-      ],
+      origin: (origin, callback) => {
+        if (isAllowedOrigin(origin)) {
+          callback(null, true);
+          return;
+        }
+
+        callback(new Error(`Origin ${origin} not allowed by Socket.IO CORS`));
+      },
       methods: ['GET', 'POST'],
       credentials: true,
     },
@@ -56,7 +94,7 @@ const startServer = (port) => {
 
 const preferredPort = Number(process.env.PORT) || 5001;
 
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json({
   limit: '50mb',
   verify: (req, res, buffer) => {
