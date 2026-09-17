@@ -1,6 +1,18 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+const resolveApiUrl = () => {
+  const rawValue = (import.meta.env.VITE_API_URL || '').trim();
+  const placeholderPattern = /YOUR-RENDER-BACKEND|your-render-backend|example\.com|localhost:5001/i;
+
+  if (!rawValue || placeholderPattern.test(rawValue)) {
+    console.warn('VITE_API_URL is missing or still using a placeholder value. Falling back to localhost for local development.');
+    return 'http://localhost:5001/api';
+  }
+
+  return rawValue.replace(/\/+$/, '');
+};
+
+const API_URL = resolveApiUrl();
 const defaultStoreCategories = ['Lace', 'Atampa', 'Passion', 'Shadda', 'Cotton', 'Hijab', 'Abaya'];
 const normalizeCategoryName = (category) => String(category ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ');
 const categoryMatches = (productCategory, selectedCategory) => {
